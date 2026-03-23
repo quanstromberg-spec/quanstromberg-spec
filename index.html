@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculate your lawn size</title>
+  <!-- Roboto (body) + Barlow Bold (headings — closest web match to Husqvarna Gothic Bold) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&family=Barlow:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    @font-face {
+      font-family: 'HusqvarnaGothic-Bold';
+      src: url('HusqvarnaGothic-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }
+    /* ── Figma Design Tokens ───────────────────────────────── */
+    :root {
+      --grey-600:   #3D3D3C;
+      --grey-500:   #686867;
+      --grey-400:   #90908F;
+      --hq-blue:    #273A60;
+      --success:    #227730;
+      --success-bg: rgba(34,119,48,0.04);
+      --white:      #FFFFFF;
+      --shadow-1:   0px 4px 40px rgba(0,0,0,0.12);
+      --shadow-card:3px 3px 2px rgba(0,0,0,0.04);
+      --fh: 'Barlow', 'Arial Black', Arial, sans-serif;   /* headings  */
+      --fb: 'Roboto', 'Helvetica Neue', Arial, sans-serif; /* body      */
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--fb);
+      background: #2b2b2b;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── Trigger ─────────────────────────────────────────────── */
+    .trigger-btn {
+      background: var(--hq-blue); color: var(--white); border: none;
+      padding: 15px 32px; border-radius: 16px;
+      font-family: var(--fh); font-size: 14px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+      transition: background .15s;
+    }
+    .trigger-btn:hover { background: #1d2d4c; }
+
+    /* ── Overlay ─────────────────────────────────────────────── */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(20,20,20,0.55); z-index: 200;
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    .overlay.active { display: flex; }
+    @keyframes modalIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── Modal ───────────────────────────────────────────────── */
+    .modal {
+      background: var(--white);
+      border-radius: 48px;
+      width: 100%; max-width: 1200px; max-height: 92vh;
+      display: grid; grid-template-columns: 357px 1fr;
+      overflow: hidden; position: relative;
+      box-shadow: var(--shadow-1);
+      animation: modalIn .22s ease;
+    }
+
+    /* ── Close button ────────────────────────────────────────── */
+    .close-btn {
+      position: absolute; top: 24px; right: 24px;
+      width: 48px; height: 48px;
+      background: transparent; border: none;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      border-radius: 16px; color: var(--grey-600);
+      transition: background .12s; z-index: 10;
+    }
+    .close-btn:hover { background: rgba(0,0,0,0.04); }
+
+    /* ── Left panel ──────────────────────────────────────────── */
+    .left-panel {
+      padding: 48px; padding-right: 32px;
+      display: flex; flex-direction: column;
+      justify-content: space-between; gap: 24px;
+      overflow-y: auto;
+      border-right: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .modal-title {
+      font-family: var(--fh); font-size: 28px; font-weight: 700;
+      line-height: 32px; letter-spacing: -0.2px; color: var(--grey-600);
+      padding-right: 60px; /* avoid close btn overlap */
+    }
+
+    /* Floating-label text input */
+    .input-wrap { position: relative; height: 48px; }
+    .input-wrap input {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      padding: 0 16px;
+      border: 1.5px solid var(--grey-500); border-radius: 8px;
+      background: transparent; outline: none;
+      font-family: var(--fb); font-size: 18px; font-weight: 300;
+      line-height: 28px; letter-spacing: 0.4px; color: var(--grey-600);
+      transition: border-color .15s;
+    }
+    .input-wrap input:focus { border-color: var(--hq-blue); }
+    .input-wrap .float-label {
+      position: absolute; top: -10px; left: 12px;
+      background: var(--white); padding: 0 4px;
+      font-family: var(--fb); font-size: 14px; font-weight: 300;
+      line-height: 20px; letter-spacing: 0.4px; color: var(--grey-500);
+      pointer-events: none; z-index: 1; border-radius: 4px;
+    }
+    .spin {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px; border: 2px solid #e0e0e0; border-top-color: var(--hq-blue);
+      border-radius: 50%; animation: spin .55s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+    .ac-drop {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--white); border: 1.5px solid var(--grey-500); border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.12); z-index: 1000; display: none; overflow: hidden;
+    }
+    .ac-drop.open { display: block; }
+    .ac-row {
+      padding: 10px 16px; font-family: var(--fb); font-size: 14px; font-weight: 300;
+      letter-spacing: 0.4px; color: var(--grey-600); cursor: pointer;
+      border-bottom: 1px solid rgba(0,0,0,0.05); line-height: 1.4;
+      display: flex; gap: 8px; align-items: flex-start;
+    }
+    .ac-row:last-child { border-bottom: none; }
+    .ac-row:hover { background: rgba(0,0,0,0.03); }
+
+    /* "Add area" heading + bullet list */
+    .section-head {
+      font-family: var(--fh); font-size: 20px; font-weight: 700;
+      line-height: 28px; color: var(--grey-600);
+    }
+    .how-list {
+      list-style: disc; padding-left: 24px;
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .how-list li {
+      font-family: var(--fb); font-size: 16px; font-weight: 300;
+      line-height: 24px; letter-spacing: 0.4px; color: var(--grey-600);
+    }
+
+    /* Bottom: range result + confirm */
+    .panel-bottom { display: flex; flex-direction: column; gap: 24px; }
+
+    .range-label {
+      font-family: var(--fb); font-size: 18px; font-weight: 300;
+      line-height: 28px; letter-spacing: 0.4px; color: var(--grey-600);
+      margin-bottom: 8px;
+    }
+    .range-card {
+      background: var(--success-bg); border: 2px solid var(--success);
+      border-radius: 24px; padding: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      opacity: 0; transition: opacity .22s, transform .22s; transform: translateY(4px);
+    }
+    .range-card.show { opacity: 1; transform: translateY(0); }
+    .range-value {
+      font-family: var(--fh); font-size: 20px; font-weight: 700;
+      line-height: 28px; color: var(--grey-600);
+    }
+    .range-check {
+      width: 20px; height: 20px; background: var(--success);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .confirm-btn {
+      width: 100%; height: 48px;
+      background: var(--hq-blue); color: var(--white); border: none;
+      border-radius: 16px;
+      font-family: 'HusqvarnaGothic-Bold', sans-serif; font-size: 14px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    .confirm-btn:disabled { opacity: 0.38; cursor: not-allowed; }
+    .confirm-btn:not(:disabled):hover { background: #1d2d4c; }
+
+    /* ── Map panel ───────────────────────────────────────────── */
+    .map-panel {
+      position: relative; background: #c4c4c4;
+      border-radius: 0 48px 48px 0; overflow: hidden;
+    }
+    #map { width: 100%; height: 100%; }
+    .leaflet-container { cursor: crosshair !important; font-family: var(--fb); }
+    .leaflet-control-zoom { display: none !important; }
+
+    /* Map top bar */
+    .map-top {
+      position: absolute; top: 16px; right: 16px;
+      display: flex; gap: 8px; z-index: 500;
+    }
+    .fn-btn {
+      display: flex; align-items: center; gap: 8px;
+      height: 40px; padding: 0 16px;
+      background: var(--white); border: 1px solid var(--grey-500); border-radius: 16px;
+      font-family: var(--fb); font-size: 14px; font-weight: 300;
+      letter-spacing: 0.4px; color: var(--grey-600);
+      cursor: pointer; transition: background .12s; white-space: nowrap;
+    }
+    .fn-btn:hover { background: rgba(0,0,0,0.03); }
+
+    /* Map bottom bar */
+    .map-bottom {
+      position: absolute; bottom: 32px; left: 0; right: 0;
+      padding: 0 32px;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      z-index: 500; pointer-events: none;
+    }
+    .map-bottom > * { pointer-events: all; }
+
+    /* Area pill */
+    .area-pill {
+      background: var(--white); border-radius: 20px; padding: 0 20px;
+      height: 48px; display: flex; align-items: center; gap: 10px;
+      box-shadow: var(--shadow-card);
+    }
+    .pill-label {
+      font-family: var(--fb); font-size: 18px; font-weight: 300;
+      letter-spacing: 0.4px; color: var(--grey-600);
+    }
+    .pill-value {
+      font-family: var(--fh); font-size: 20px; font-weight: 700;
+      color: var(--grey-600); display: flex; align-items: baseline; gap: 1px;
+    }
+    .pill-value sup { font-size: 12px; }
+
+    /* Zoom buttons */
+    .zoom-wrap { display: flex; flex-direction: column; gap: 16px; }
+    .zbtn {
+      width: 48px; height: 48px; background: var(--white); border: none;
+      border-radius: 16px; box-shadow: var(--shadow-card);
+      cursor: pointer; font-size: 22px; font-weight: 300;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--grey-600); transition: background .12s; line-height: 1;
+    }
+    .zbtn:hover { background: rgba(0,0,0,0.03); }
+
+    /* Polygon vertex dots — green like the Figma */
+    .lawn-dot {
+      width: 14px; height: 14px; background: #27A34A;
+      border: 2.5px solid var(--white); border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: grab;
+    }
+
+    /* ── Mobile (≤760px) ─────────────────────────────────────── */
+    @media (max-width: 760px) {
+      .modal {
+        grid-template-columns: 1fr; grid-template-rows: auto 350px auto;
+        border-radius: 32px; max-height: 92vh; overflow-y: auto;
+      }
+      .left-panel {
+        padding: 20px; padding-top: 20px; border-right: none;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        gap: 16px;
+      }
+      .modal-title { font-size: 24px; line-height: 28px; letter-spacing: 0; }
+      .map-panel { border-radius: 0; }
+      .map-bottom { bottom: 16px; padding: 0 16px; }
+      .close-btn { top: 13px; right: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="trigger-btn" onclick="openModal()">Calculate Lawn Size</button>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+
+    <button class="close-btn" onclick="closeModal()" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3 3l14 14M17 3L3 17"/>
+      </svg>
+    </button>
+
+    <!-- ── Left panel ── -->
+    <div class="left-panel">
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <h2 class="modal-title">Calculate your lawn size</h2>
+
+        <!-- Floating-label search input -->
+        <div class="input-wrap" style="position:relative">
+          <input type="text" id="searchInput" placeholder="Street 1, Cityname" autocomplete="off" />
+          <span class="float-label">Search adress</span>
+          <div class="spin" id="sSpin"></div>
+          <div class="ac-drop" id="acDrop"></div>
+        </div>
+
+        <!-- Instructions -->
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <p class="section-head">Add area</p>
+          <ul class="how-list">
+            <li>Scroll or use the +/- buttons to zoom in on the property</li>
+            <li>Click on the map to mark the corners of your lawn, draw around buildings and obstacles</li>
+            <li>Move point by dragging them</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Bottom: range + confirm -->
+      <div class="panel-bottom">
+        <div>
+          <p class="range-label">Your lawn is in the range:</p>
+          <div class="range-card" id="rangeCard">
+            <span class="range-value" id="rangeText">&mdash;</span>
+            <div class="range-check">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 6l3 3 5-5"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <button class="confirm-btn" id="confirmBtn" onclick="handleConfirm()" disabled>CONFIRM</button>
+      </div>
+
+    </div>
+
+    <!-- ── Map panel ── -->
+    <div class="map-panel">
+      <div id="map"></div>
+
+      <div class="map-top">
+        <button class="fn-btn" onclick="clearAll()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3,6 13,6"/><path d="M12 6l-1 8H5L4 6"/><path d="M6 6V4a1 1 0 011-1h2a1 1 0 011 1v2"/>
+          </svg>
+          Clear
+        </button>
+        <button class="fn-btn" onclick="undoLast()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7h7a3 3 0 010 6H7"/><path d="M5 5L3 7l2 2"/>
+          </svg>
+          Undo
+        </button>
+      </div>
+
+      <div class="map-bottom">
+        <div class="area-pill">
+          <span class="pill-label">Area:</span>
+          <span class="pill-value" id="mapVal">&mdash;</span>
+        </div>
+        <div class="zoom-wrap">
+          <button class="zbtn" id="zIn">+</button>
+          <button class="zbtn" id="zOut">&minus;</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Map setup ─────────────────────────────────────────────────
+const map = L.map('map', { center: [57.7, 15], zoom: 6, zoomControl: false });
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Tiles &copy; Esri', maxZoom: 21 }).addTo(map);
+document.getElementById('zIn').onclick  = () => map.zoomIn();
+document.getElementById('zOut').onclick = () => map.zoomOut();
+
+// ── State ─────────────────────────────────────────────────────
+let pts = [], markers = [], polygon = null, polyline = null, totalArea = 0;
+
+const dotIcon = () => L.divIcon({
+  className: '', html: '<div class="lawn-dot"></div>',
+  iconSize: [14,14], iconAnchor: [7,7]
+});
+
+// ── Drawing ───────────────────────────────────────────────────
+map.on('click', e => {
+  const idx = pts.length;
+  pts.push(e.latlng);
+  const m = L.marker(e.latlng, { icon: dotIcon(), draggable: true, zIndexOffset: 1000 }).addTo(map);
+  m.on('drag', () => { pts[idx] = m.getLatLng(); redraw(); });
+  markers.push(m);
+  redraw();
+});
+
+function redraw() {
+  if (polygon)  { map.removeLayer(polygon);  polygon  = null; }
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  if (pts.length < 2) return;
+  if (pts.length >= 3) {
+    polygon = L.polygon(pts, { color: '#fff', weight: 2.5, fillColor: '#fff', fillOpacity: .18 }).addTo(map);
+    updateArea();
+  } else {
+    polyline = L.polyline(pts, { color: '#fff', weight: 2.5 }).addTo(map);
+  }
+}
+
+function updateArea() {
+  const R = 6378137, n = pts.length; let a = 0;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i+1)%n];
+    a += (q.lng - p.lng) * Math.PI/180 * (2 + Math.sin(p.lat*Math.PI/180) + Math.sin(q.lat*Math.PI/180));
+  }
+  totalArea = Math.abs(a * R * R / 2);
+  const r = Math.round(totalArea);
+  document.getElementById('mapVal').innerHTML   = r.toLocaleString() + '&thinsp;m<sup>2</sup>';
+  document.getElementById('rangeText').textContent = getRange(r);
+  document.getElementById('rangeCard').classList.add('show');
+  document.getElementById('confirmBtn').disabled = false;
+}
+
+function getRange(a) {
+  const bands = [
+    [0,200,'0 – 200 m²'],[200,500,'200 – 500 m²'],[500,1000,'500 m² - 1 000 m²'],
+    [1000,2000,'1 000 m² - 2 000 m²'],[2000,5000,'2 000 m² - 5 000 m²'],
+    [5000,10000,'5 000 m² - 10 000 m²'],[10000,Infinity,'10 000+ m²']
+  ];
+  return (bands.find(([lo,hi]) => a >= lo && a < hi) || bands[bands.length-1])[2];
+}
+
+function clearAll() {
+  markers.forEach(m => map.removeLayer(m)); markers = []; pts = [];
+  if (polygon)  { map.removeLayer(polygon);  polygon  = null; }
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  totalArea = 0;
+  document.getElementById('mapVal').innerHTML = '&mdash;';
+  document.getElementById('rangeCard').classList.remove('show');
+  document.getElementById('confirmBtn').disabled = true;
+}
+
+function undoLast() {
+  if (!markers.length) return;
+  map.removeLayer(markers.pop()); pts.pop(); redraw();
+  if (pts.length < 3) {
+    totalArea = 0;
+    document.getElementById('mapVal').innerHTML = '&mdash;';
+    document.getElementById('rangeCard').classList.remove('show');
+    document.getElementById('confirmBtn').disabled = true;
+  }
+}
+
+function handleConfirm() {
+  if (!totalArea) return;
+  alert('Lawn size confirmed:\n' + Math.round(totalArea).toLocaleString() + ' m²  (' + getRange(Math.round(totalArea)) + ')');
+  closeModal();
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('overlay').classList.add('active');
+  setTimeout(() => map.invalidateSize(), 60);
+}
+function closeModal() { document.getElementById('overlay').classList.remove('active'); }
+document.getElementById('overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ── Address search ────────────────────────────────────────────
+const field = document.getElementById('searchInput');
+let tmr = null;
+field.addEventListener('input', function() {
+  clearTimeout(tmr);
+  const q = this.value.trim();
+  if (q.length < 3) { closeAC(); return; }
+  tmr = setTimeout(() => doSearch(q), 360);
+});
+field.addEventListener('keydown', e => { if (e.key === 'Escape') closeAC(); });
+document.addEventListener('click', e => { if (!e.target.closest('.input-wrap')) closeAC(); });
+
+function doSearch(q) {
+  document.getElementById('sSpin').style.display = 'block';
+  fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=5',
+    { headers: { 'Accept-Language': 'en' } })
+  .then(r => r.json())
+  .then(d => { document.getElementById('sSpin').style.display = 'none'; showAC(d); })
+  .catch(() => { document.getElementById('sSpin').style.display = 'none'; });
+}
+function showAC(results) {
+  const drop = document.getElementById('acDrop');
+  drop.innerHTML = '';
+  if (!results.length) { closeAC(); return; }
+  results.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'ac-row';
+    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#90908F" stroke-width="1.8" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M7 1C4.8 1 3 2.8 3 5c0 3.2 4 8 4 8s4-4.8 4-8c0-2.2-1.8-4-4-4z"/><circle cx="7" cy="5" r="1.5" fill="#90908F" stroke="none"/></svg><span>' + r.display_name + '</span>';
+    el.addEventListener('click', () => pick(r));
+    drop.appendChild(el);
+  });
+  drop.classList.add('open');
+}
+function closeAC() { document.getElementById('acDrop').classList.remove('open'); }
+function pick(r) {
+  field.value = r.display_name; closeAC();
+  if (r.boundingbox) { const b = r.boundingbox.map(Number); map.fitBounds([[b[0],b[2]],[b[1],b[3]]]); }
+  else { map.setView([+r.lat, +r.lon], 18); }
+  if (map.getZoom() < 16) map.setZoom(17);
+}
+</script>
+</body>
+</html>

@@ -235,6 +235,11 @@
       margin-top: 16px;
     }
     .confirm-btn:hover { opacity: 0.88; }
+    .confirm-btn.outline {
+      background: #FFFFFF;
+      color: #273A60;
+      border: 1.5px solid #273A60;
+    }
 
     /* ── Result view ────────────────────────────────────────── */
     .result-view { display: none; flex-direction: column; gap: 12px; }
@@ -373,7 +378,7 @@
           <span class="correct-label">Covered</span>
         </div>
         <p class="result-msg">Great news – you can use Husqvarna Cloud for a faster and seamless installation, as long as you have a stable internet connection at your property.</p>
-        <a class="learn-link" href="#">Learn more about wire free setup</a>
+        <button class="confirm-btn outline" onclick="closeModal()">GO BACK TO THE PRODUCT PAGE</button>
       </div>
 
     </div>

@@ -102,6 +102,18 @@
     }
     .zoom-wrap .map-btn { position: static; }
 
+    /* Pan arrow buttons bottom-right */
+    .pan-wrap {
+      position: absolute; bottom: 12px; right: 16px;
+      width: 133px; height: 115px;
+      z-index: 600;
+    }
+    .pan-btn {
+      position: absolute;
+      width: 40px; height: 40px;
+      padding: 0;
+    }
+
     /* Center pin — always stays in the middle of the map */
     .center-pin {
       position: absolute;
@@ -328,6 +340,34 @@
         </svg>
       </button>
 
+      <!-- Pan arrow buttons bottom-right -->
+      <div class="pan-wrap" id="panWrap">
+        <!-- Up: x=44 y=0 in original SVG -->
+        <button class="map-btn pan-btn" style="left:44px;top:0px" aria-label="Pan up" tabindex="0" onclick="panMap(0,-80)">
+          <svg width="40" height="40" viewBox="44 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M72.1616 24.007C72.3762 23.8067 72.3927 23.4916 72.2111 23.2736L72.1616 23.2213L64.4088 15.985C64.1801 15.7715 63.8252 15.7715 63.5965 15.985L55.8436 23.2213C55.6112 23.4383 55.6112 23.79 55.8436 24.007C56.0582 24.2073 56.3958 24.2227 56.6293 24.0532L56.6854 24.007L64.0031 17.1777L71.3198 24.007C71.5344 24.2073 71.872 24.2227 72.1055 24.0532L72.1616 24.007Z" fill="#3D3D3C"/>
+          </svg>
+        </button>
+        <!-- Down: x=44 y=70 -->
+        <button class="map-btn pan-btn" style="left:44px;top:70px" aria-label="Pan down" tabindex="0" onclick="panMap(0,80)">
+          <svg width="40" height="40" viewBox="44 70 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M72.1616 85.9987C72.3762 86.1989 72.3927 86.5141 72.2111 86.732L72.1616 86.7844L64.4088 94.0207C64.1801 94.2341 63.8252 94.2341 63.5965 94.0207L55.8436 86.7844C55.6112 86.5674 55.6112 86.2156 55.8436 85.9987C56.0582 85.7984 56.3958 85.783 56.6293 85.9524L56.6854 85.9987L64.0031 92.828L71.3198 85.9987C71.5344 85.7984 71.872 85.783 72.1055 85.9524L72.1616 85.9987Z" fill="#3D3D3C"/>
+          </svg>
+        </button>
+        <!-- Right: x=88 y=33 -->
+        <button class="map-btn pan-btn" style="left:88px;top:33px" aria-label="Pan right" tabindex="0" onclick="panMap(80,0)">
+          <svg width="40" height="40" viewBox="88 33 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M103.999 44.8435C104.199 44.629 104.514 44.6125 104.732 44.794L104.784 44.8435L112.02 52.5952C112.234 52.8238 112.234 53.1787 112.02 53.4073L104.784 61.159C104.567 61.3914 104.216 61.3914 103.999 61.159C103.798 60.9445 103.783 60.6069 103.952 60.3734L103.999 60.3174L110.828 53.0008L103.999 45.6852C103.798 45.4706 103.783 45.133 103.952 44.8996L103.999 44.8435Z" fill="#3D3D3C"/>
+          </svg>
+        </button>
+        <!-- Left: x=0 y=35 -->
+        <button class="map-btn pan-btn" style="left:0px;top:35px" aria-label="Pan left" tabindex="0" onclick="panMap(-80,0)">
+          <svg width="40" height="40" viewBox="0 35 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24.0053 46.8435C23.805 46.629 23.4899 46.6125 23.2719 46.794L23.2196 46.8435L15.9836 54.5952C15.7701 54.8238 15.7701 55.1787 15.9836 55.4073L23.2196 63.159C23.4365 63.3914 23.7883 63.3914 24.0053 63.159C24.2055 62.9445 24.2209 62.6069 24.0515 62.3734L24.0053 62.3174L17.1762 55.0008L24.0053 47.6852C24.2055 47.4706 24.2209 47.133 24.0515 46.8996L24.0053 46.8435Z" fill="#3D3D3C"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- Zoom buttons bottom-left -->
       <div class="zoom-wrap">
         <button class="map-btn" onclick="map.zoomIn()" aria-label="Zoom in">
@@ -489,6 +529,18 @@ function openModal() {
 function closeModal() {
   document.getElementById('overlay').classList.remove('active');
 }
+
+// ── Pan map ───────────────────────────────────────────────────
+function panMap(dx, dy) { map.panBy([dx, dy]); }
+
+// Arrow-key navigation between pan buttons (up, down, right, left — DOM order)
+document.getElementById('panWrap').addEventListener('keydown', e => {
+  const btns = [...document.querySelectorAll('.pan-btn')];
+  const idx = btns.indexOf(document.activeElement);
+  if (idx === -1) return;
+  const nav = { ArrowUp: 0, ArrowDown: 1, ArrowRight: 2, ArrowLeft: 3 };
+  if (e.key in nav) { e.preventDefault(); btns[nav[e.key]].focus(); }
+});
 
 // ── Default address on load ───────────────────────────────────
 const DEFAULT_ADDRESS = 'Lilla Frö 101, Mörbylånga, Sweden';
